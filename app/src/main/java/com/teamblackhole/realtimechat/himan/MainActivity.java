@@ -295,15 +295,17 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected String doInBackground(String... errors) {
-            String category;
+            AppCategory category;
+
             pm = getPackageManager();
 
             for (String s : installed) {
                 String query_url = "https://play.google.com/store/apps/details?id=" + s;  //GOOGLE_URL + packageInfo.packageName;
                 Log.i(TAG, query_url);
                 category = getCategory(query_url);
-                Log.e("CATEGORY", category);
+                Log.e("CATEGORY", category.getCompany());
             }
+
             return null;
         }
 
