@@ -1,6 +1,8 @@
 ![Alt text](app/src/main/res/mipmap-hdpi/ic_launcher.png?raw=true "Codinism")
 #Hi Codnism
 
+<a href="https://github.com/anwarpro/Hi-Codinism/raw/master/HiCodinism.apk" download>Click to Download</a> <br>
+
 I have coded this for finding user interest category using user installed apps and facebook like page.
 <br>
 By App Categories:
