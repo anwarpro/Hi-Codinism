@@ -243,12 +243,15 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(Event event) {
 
-                StringBuilder apps = new StringBuilder();
+                String apps = "";
                 String category = event.getData().get("x");
 
                 for (AppCategory ac : list) {
                     if (ac.getCategories().contains(category)) {
-                        apps.append(getAppNameFromPkgName(getApplicationContext(), ac.getPackName()) + ", ");
+                        String name = getAppNameFromPkgName(getApplicationContext(), ac.getPackName());
+                        if (!apps.contains(name)) {
+                            apps = apps + name + ", ";
+                        }
                     }
                 }
 
