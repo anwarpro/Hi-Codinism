@@ -1,4 +1,4 @@
-![Alt text](app/src/main/res/mipmap-hdpi/ic_launcher.png?raw=true "Codinism")
+![Alt text](app/src/main/res/mipmap-hdpi/ic_launcher.png?raw=true "Codinism") <br>
 #Hi Codnism
 
 <a href="https://github.com/anwarpro/Hi-Codinism/raw/master/HiCodinism.apk" download>Click to Download</a> <br>
