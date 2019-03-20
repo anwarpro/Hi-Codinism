@@ -1,17 +1,24 @@
 package com.teamblackhole.realtimechat.himan;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.widget.Toast;
 
 import com.anychart.AnyChart;
@@ -43,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -57,9 +65,13 @@ public class MainActivity extends AppCompatActivity {
     private String email;
     private String birthday;
     private String gender;
+    private List<AppCategory> list = new ArrayList();
+
 
     UsageStatsManager mUsageStatsManager;
     private AnyChartView anyChartView;
+
+    SharedPreferences sharedPref;
 
     @SuppressLint("WrongConstant")
     @Override
@@ -72,22 +84,25 @@ public class MainActivity extends AppCompatActivity {
 
         installedApps();
 
-        List<UsageStats> usageStatsList =
-                getUsageStatistics(UsageStatsManager.INTERVAL_MONTHLY);
-        Collections.sort(usageStatsList, new LastTimeLaunchedComparatorDesc());
-
-        new FetchCategoryTask(installed).execute();
-
         anyChartView = findViewById(R.id.any_chart_view);
         anyChartView.setProgressBar(findViewById(R.id.progress_bar));
-        chart();
+        anyChartView.setAlwaysDrawnWithCacheEnabled(false);
 
+        sharedPref = getSharedPreferences("com.codinism.hicondinism", Context.MODE_PRIVATE);
+
+//        take decision by max apps used time
+//        it take max used three apps categories and take max occurrence
+//        category as a interested category
+
+        boolean isUsed = sharedPref.getBoolean("isUsed", true);
+
+        thinkBy(isUsed);
 
         callbackManager = CallbackManager.Factory.create();
 
         loginButton = findViewById(R.id.login_button);
-        loginButton.setReadPermissions("email", "user_birthday", "user_posts");
-        // If you are using in a fragment, call loginButton.setFragment(this);
+        loginButton.setReadPermissions("email", "user_birthday", "user_posts",
+                "user_likes", "business_management");
 
         // Callback registration
         loginButton.registerCallback(callbackManager, new FacebookCallback<LoginResult>() {
@@ -98,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
                 GraphRequest request = GraphRequest.newMeRequest(loginResult.getAccessToken(), new GraphRequest.GraphJSONObjectCallback() {
                     @Override
                     public void onCompleted(JSONObject object, GraphResponse response) {
+
                         Log.e("Graph", object.toString());
                         Log.e("Graph", response.toString());
 
@@ -128,7 +144,7 @@ public class MainActivity extends AppCompatActivity {
                 });
                 //Here we put the requested fields to be returned from the JSONObject
                 Bundle parameters = new Bundle();
-                parameters.putString("fields", "id, first_name, last_name, email, birthday, gender");
+                parameters.putString("fields", "id, first_name, last_name, email, birthday, gender, likes.limit(1000){category,name,about}");
                 request.setParameters(parameters);
                 request.executeAsync();
 
@@ -147,8 +163,68 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void chart() {
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main_activity_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        SharedPreferences.Editor editor = sharedPref.edit();
+        switch (item.getItemId()) {
+            // action with ID action_refresh was selected
+            case R.id.action_used:
+                editor.putBoolean("isUsed", true);
+                editor.commit();
+
+                finish();
+                startActivity(getIntent());
+
+                break;
+            // action with ID action_settings was selected
+            case R.id.action_installed:
+                editor.putBoolean("isUsed", false);
+                editor.commit();
+
+                finish();
+                startActivity(getIntent());
+
+                break;
+            default:
+                break;
+        }
+
+        return true;
+    }
+
+    private void thinkBy(boolean isUsed) {
+        if (isUsed) {
+            List<UsageStats> usageStatsList =
+                    getUsageStatistics(UsageStatsManager.INTERVAL_YEARLY);
+
+            if (usageStatsList.size() == 0) {
+                return;
+            }
+            Collections.sort(usageStatsList, new LastTimeLaunchedComparatorDesc());
+
+            new FetchCategoryTask(installed, true, usageStatsList).execute();
+
+            return;
+        }
+
+//        else by installed apps categories
+        new FetchCategoryTask(installed, false, null).execute();
+
+    }
+
+    private void chart(String type) {
+
+        Log.i("test", "chart: " + type);
+
         Pie pie = AnyChart.pie();
+        pie.autoRedraw();
 
         pie.setOnClickListener(new ListenersInterface.OnClickListener(new String[]{"x", "value"}) {
             @Override
@@ -157,22 +233,44 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        List<String> cats = new ArrayList<>();
+
+        for (AppCategory ac : list) {
+            cats.addAll(ac.getCategories());
+        }
+
+        HashSet<String> uniqueCategories = new HashSet<>(cats);
+
         List<DataEntry> data = new ArrayList<>();
-        data.add(new ValueDataEntry("Apples", 6371664));
-        data.add(new ValueDataEntry("Pears", 789622));
-        data.add(new ValueDataEntry("Bananas", 7216301));
-        data.add(new ValueDataEntry("Grapes", 1486621));
-        data.add(new ValueDataEntry("Oranges", 1200000));
+
+        int max = 0;
+        String interested = "";
+
+        for (String category : uniqueCategories) {
+            int count = Collections.frequency(cats, category);
+            if (max < count) {
+                max = count;
+                interested = category;
+            }
+            data.add(new ValueDataEntry(category, count));
+            Log.i("Category", "category: " + category);
+        }
+
+        if (max != 0) {
+            showDecision("May be your are mostly interested in \t\t\'" + interested + "\'\n type of things");
+        } else {
+            showDecision("I can't take any decision for lack of information");
+        }
 
         pie.data(data);
 
-        pie.title("Fruits imported in 2015 (in kg)");
+        pie.title("Categories imported of " + type + " apps");
 
         pie.labels().position("outside");
 
         pie.legend().title().enabled(true);
         pie.legend().title()
-                .text("Retail channels")
+                .text("Categories")
                 .padding(0d, 0d, 10d, 0d);
 
         pie.legend()
@@ -203,6 +301,21 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void showDecision(String msg) {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(this);
+        alertDialogBuilder.setMessage(msg);
+        alertDialogBuilder.setPositiveButton("OK",
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface arg0, int arg1) {
+                        arg0.dismiss();
+                    }
+                });
+
+        AlertDialog alertDialog = alertDialogBuilder.create();
+        alertDialog.show();
+    }
+
     /**
      * The {@link Comparator} to sort a collection of {@link UsageStats} sorted by the timestamp
      * last time the app was used in the descendant order.
@@ -211,7 +324,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public int compare(UsageStats left, UsageStats right) {
-            return Long.compare(right.getLastTimeUsed(), left.getLastTimeUsed());
+            return Long.compare(right.getTotalTimeInForeground(), left.getTotalTimeInForeground());
         }
     }
 
@@ -234,44 +347,51 @@ public class MainActivity extends AppCompatActivity {
                         System.currentTimeMillis());
 
         if (queryUsageStats.size() == 0) {
-            Log.i("MAINActivity", "The user may not allow the access to apps usage. ");
-            Toast.makeText(this,
-                    getString(R.string.explanation_access_to_appusage_is_not_enabled),
-                    Toast.LENGTH_LONG).show();
-//            mOpenUsageSettingButton.setVisibility(View.VISIBLE);
-//            mOpenUsageSettingButton.setOnClickListener(new View.OnClickListener() {
-//                @Override
-//                public void onClick(View v) {
-//                    startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
-//                }
-//            });
+
+            //show for open settings
+            AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(this);
+            alertDialogBuilder.setMessage(getString(R.string.explanation_access_to_appusage_is_not_enabled));
+            alertDialogBuilder.setPositiveButton("OK",
+                    new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface arg0, int arg1) {
+                            startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
+                        }
+                    });
+
+            AlertDialog alertDialog = alertDialogBuilder.create();
+            alertDialog.show();
+
         }
         return queryUsageStats;
     }
 
-    private List<AppCategory> list = new ArrayList();
-
-
     private class FetchCategoryTask extends AsyncTask<String, Void, String> {
 
         private final String TAG = FetchCategoryTask.class.getSimpleName();
+        private final boolean isUsed;
+        private final List<UsageStats> usageStatsLists;
         private List<String> installed;
-        private PackageManager pm;
 
-        public FetchCategoryTask(List<String> installed) {
+        public FetchCategoryTask(List<String> installed, boolean isUsed, List<UsageStats> usageStatsLists) {
             this.installed = installed;
+            this.isUsed = isUsed;
+            this.usageStatsLists = usageStatsLists;
         }
 
-        private AppCategory getCategory(String query_url) {
+        private AppCategory getCategory(String query_url, String name) {
 
             try {
                 Document doc = Jsoup.connect(query_url).get();
                 Elements link = doc.select("a[class=\"hrTbp R8zArc\"]");
                 int i = 0;
+
                 AppCategory ap = null;
+
                 for (String s : link.eachText()) {
                     if (i++ == 0) {
                         ap = new AppCategory(s, new ArrayList<String>());
+                        ap.setPackName(name);
                     } else {
                         ap.setCategories(s);
                     }
@@ -280,6 +400,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
 //                Log.e("DOc", e.toString());
             }
+
             return null;
         }
 
@@ -291,20 +412,60 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected void onPostExecute(String s) {
             super.onPostExecute(s);
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (isUsed) {
+                        chart("most used");
+                    } else {
+                        chart("installed");
+                    }
+                }
+            });
         }
 
         @Override
         protected String doInBackground(String... errors) {
+
             AppCategory category;
 
-            pm = getPackageManager();
+            List<AppCategory> appCategories = new ArrayList<>();
 
-            for (String s : installed) {
-                String query_url = "https://play.google.com/store/apps/details?id=" + s;  //GOOGLE_URL + packageInfo.packageName;
-                Log.i(TAG, query_url);
-                category = getCategory(query_url);
-                Log.e("CATEGORY", category.getCompany());
+            list = null;
+
+            if (this.isUsed) {
+
+                int i = 0;
+
+                //take most used 10 apps as a countable
+
+                for (UsageStats us : usageStatsLists) {
+                    if (installed.contains(us.getPackageName())) {
+                        String query_url = "https://play.google.com/store/apps/details?id=" + us.getPackageName();  //GOOGLE_URL + packageInfo.packageName;
+                        Log.i(TAG, query_url);
+                        category = getCategory(query_url, us.getPackageName());
+                        if (category != null) {
+                            appCategories.add(category);
+                            if (i++ == 10) {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                for (String s : installed) {
+                    String query_url = "https://play.google.com/store/apps/details?id=" + s;  //GOOGLE_URL + packageInfo.packageName;
+                    Log.i(TAG, query_url);
+                    category = getCategory(query_url, s);
+                    if (category != null) {
+                        appCategories.add(category);
+                    }
+                }
+
             }
+
+            list = appCategories;
 
             return null;
         }
