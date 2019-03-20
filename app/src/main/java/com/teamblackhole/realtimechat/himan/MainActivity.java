@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -199,6 +200,18 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
+    public static String getAppNameFromPkgName(Context context, String PackageName) {
+        try {
+            PackageManager packageManager = context.getPackageManager();
+            ApplicationInfo info = packageManager.getApplicationInfo(PackageName, PackageManager.GET_META_DATA);
+            String appName = (String) packageManager.getApplicationLabel(info);
+            return appName;
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+            return "";
+        }
+    }
+
     private void thinkBy(boolean isUsed) {
         if (isUsed) {
             List<UsageStats> usageStatsList =
@@ -223,13 +236,23 @@ public class MainActivity extends AppCompatActivity {
 
         Log.i("test", "chart: " + type);
 
-        Pie pie = AnyChart.pie();
+        final Pie pie = AnyChart.pie();
         pie.autoRedraw();
 
         pie.setOnClickListener(new ListenersInterface.OnClickListener(new String[]{"x", "value"}) {
             @Override
             public void onClick(Event event) {
-                Toast.makeText(MainActivity.this, event.getData().get("x") + ":" + event.getData().get("value"), Toast.LENGTH_SHORT).show();
+
+                StringBuilder apps = new StringBuilder();
+                String category = event.getData().get("x");
+
+                for (AppCategory ac : list) {
+                    if (ac.getCategories().contains(category)) {
+                        apps.append(getAppNameFromPkgName(getApplicationContext(), ac.getPackName()) + ", ");
+                    }
+                }
+
+                Toast.makeText(MainActivity.this, apps.toString(), Toast.LENGTH_LONG).show();
             }
         });
 
@@ -436,6 +459,11 @@ public class MainActivity extends AppCompatActivity {
             if (this.isUsed) {
 
                 int i = 0;
+                int maxtake = 10;
+
+                if (installed.size() > 10) {
+                    maxtake = maxtake + (installed.size() / 2);
+                }
 
                 //take most used 10 apps as a countable
 
@@ -446,7 +474,7 @@ public class MainActivity extends AppCompatActivity {
                         category = getCategory(query_url, us.getPackageName());
                         if (category != null) {
                             appCategories.add(category);
-                            if (i++ == 10) {
+                            if (i++ == maxtake) {
                                 break;
                             }
                         }

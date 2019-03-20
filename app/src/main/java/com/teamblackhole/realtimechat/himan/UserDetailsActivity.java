@@ -156,7 +156,16 @@ public class UserDetailsActivity extends AppCompatActivity implements View.OnCli
         pie.setOnClickListener(new ListenersInterface.OnClickListener(new String[]{"x", "value"}) {
             @Override
             public void onClick(Event event) {
-                Toast.makeText(UserDetailsActivity.this, event.getData().get("x") + ":" + event.getData().get("value"), Toast.LENGTH_SHORT).show();
+                StringBuilder apps = new StringBuilder();
+                String category = event.getData().get("x");
+
+                for (FacebookPage fp : likesCategories) {
+                    if (fp.getCategory().contains(category)) {
+                        apps.append(fp.getName() + ", ");
+                    }
+                }
+
+                Toast.makeText(UserDetailsActivity.this, apps.toString(), Toast.LENGTH_LONG).show();
             }
         });
 
